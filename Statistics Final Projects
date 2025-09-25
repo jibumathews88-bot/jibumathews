@@ -1,1 +1,77 @@
+library(dplyr)
+library(stringr)
+library(car)    
+library(ggplot2)
 
+#Import dataset
+df <- read_csv("C:/Users/Jibu Mathews Idicula/Desktop/Gisma/Gisma University Of Applied Sciences/Modules/Semester 3/Quarter 1/B105A Applied Statistical Modelling/bengaluru_house_prices.csv", show_col_types = FALSE)
+
+# Data Cleaning
+# Remove BHK from 'size'
+df$bhk <- as.numeric(str_extract(df$size, "\\d+"))
+
+# Convert total_sqft to numeric
+df$total_sqft <- sapply(df$total_sqft, function(x) {
+  if (grepl("-", x)) {
+    nums <- as.numeric(unlist(strsplit(x, "-")))
+    mean(nums, na.rm = TRUE)
+  } else if (!is.na(suppressWarnings(as.numeric(x)))) {
+    as.numeric(x)
+  } else {
+    NA
+  }
+})
+
+# Remove invalid rows
+df <- df %>% filter(!is.na(total_sqft), !is.na(location), !is.na(size))
+
+# Impute bath and balcony with median
+df$bath[is.na(df$bath)] <- median(df$bath, na.rm = TRUE)
+df$balcony[is.na(df$balcony)] <- median(df$balcony, na.rm = TRUE)
+
+# Convert price_per_sqft
+df$price_per_sqft <- (df$price * 100000) / df$total_sqft
+
+# Indicator: in_society
+df$in_society <- ifelse(is.na(df$society) | df$society == "", 0, 1)
+
+# Remove outliers
+df <- df %>% filter(total_sqft >= 300, 
+                    price_per_sqft >= 1000, price_per_sqft <= 25000)
+
+# Convert factors
+df$location <- as.factor(df$location)
+df$area_type <- as.factor(df$area_type)
+df$in_society <- as.factor(df$in_society)
+
+#Statistics
+
+summary(df$price)
+mean(df$price); median(df$price); sd(df$price)
+
+# Distribution plot
+ggplot(df, aes(x = price)) + 
+  geom_histogram(bins = 50, fill = "skyblue", color = "black")
+
+# Price by BHK
+df %>% group_by(bhk) %>% summarise(mean_price = mean(price), median_price = median(price))
+
+#Tests
+
+
+#H1
+t.test(df$price, mu = 70)
+
+#H2
+leveneTest(price_per_sqft ~ location, data = df)
+
+#H3
+anova_bhk <- aov(price ~ factor(bhk), data = df)
+summary(anova_bhk)
+
+#H4
+anova_bath <- aov(price ~ factor(bath), data = df)
+summary(anova_bath)
+
+#H5
+t.test(price ~ in_society, data = df)
